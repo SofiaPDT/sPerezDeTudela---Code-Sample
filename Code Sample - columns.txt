@@ -1,0 +1,616 @@
+#columns
+from collections import namedtuple
+
+#1 = S, 2 = T, 3 = V, 4 = W, 5 = X, 6 = Y, 7 = Z
+EMPTY = 0
+VALID_VALUES = range(8)
+
+Match = namedtuple('Match', ['coordinates'])
+
+class FallerIsFrozenError(Exception):
+    pass
+
+class OnlyOneFallerError(Exception):
+    pass
+
+class NoFallerError(Exception):
+    pass
+
+class GameOverError(Exception):
+    pass
+
+class InvalidMoveError(Exception):
+    pass
+
+class InvalidJewelError(Exception):
+    pass
+
+class InvalidFieldValueError(Exception):
+    pass
+
+class Faller():
+    def __init__(self, row_bottom_value: int, column: int, values: [int]):
+        self._row_bottom_value = row_bottom_value
+        self._column = column
+
+        #Values is a list that contains the values in the faller with the top
+        #value at index 0
+        self._values = values.copy()
+        self._has_landed = False
+        self._frozen = False
+
+    def column(self) -> int:
+        '''Returns the column the faller is in'''
+        return self._column
+
+    def top(self) -> int:
+        '''Returns the top value of the faller'''
+        return self._values[0]
+
+    def middle(self) -> int:
+        '''Returns the middle value of the faller'''
+        return self._values[1]
+
+    def bottom(self) -> int:
+        '''Returns the bottom value of the faller'''
+        return self._values[2]
+
+    def row_bottom_value(self) -> int:
+        '''Returns the row the bottom value of the faller is in'''
+        return self._row_bottom_value
+
+    def copy(self) -> 'Faller':
+        '''Returns a copy of the faller'''
+        return Faller(self._row_bottom_value, self._column, self._values)
+
+    def land(self) -> None:
+        '''Places the faller in landing position'''
+        self._has_landed = True
+
+    def un_land(self) -> None:
+        '''Takes the faller out of landing postion'''
+        self._has_landed = False
+
+    def has_landed(self) -> bool:
+        '''Returns whether the faller has landed or not'''
+        return self._has_landed
+
+    def freeze(self):
+        '''Makes the faller frozen'''
+        self._frozen = True
+
+    def is_frozen(self) -> bool:
+        '''Returns whether the faller is frozen or not'''
+        return self._frozen
+
+    def values(self) -> [int]:
+        '''Returns the values in the faller as a list'''
+        return self._values
+
+    def move_left(self) -> bool:
+        '''Moves the value on column index to the left and returns true if it
+        is successful. Will also not move if the column is already at index 0'''
+        if self.is_frozen() or self._column == 0:
+            return False
+        
+        self._column -= 1
+        return True
+
+    def move_right(self) -> None:
+        '''Moves the value on column index to the right, won't do anything if it
+        cannot'''
+        if self.is_frozen():
+            return
+        
+        self._column += 1
+        return True
+
+    def rotate(self) -> bool:
+        '''Rotates the faller so that the bottom value is pushed to the top
+        and returns true if it is successful'''
+        if self.is_frozen():
+            return False
+
+        self._values[0], self._values[1], self._values[2] = (self._values[2],
+                                                             self._values[0],
+                                                             self._values[1])
+        return True
+
+    def drop(self):
+        '''Increases the row the bottom value is in by 1, to simulate falling'''
+        self._row_bottom_value += 1
+
+    def print(self):
+        '''Prints a readable version of the faller, mostly for testing'''
+        print(f'Row of the bottom value: {self._row_bottom_value}')
+        print(f'Column: {self._column}')
+        print(f'Values: {self._values}')
+
+
+
+
+    
+class GameState():
+
+    def __init__(self, rows: int, columns: int):
+        if rows >= 4 and columns >= 3:
+            self._rows = rows
+            self._columns = columns
+        else:
+            raise InvalidFieldValueError
+        self._field = self._create_new_field()
+        self._faller = None
+        self._current_matches = []
+        self._game_over = False
+
+    def rows(self) -> int:
+        '''Returns amount of rows in the field'''
+        return self._rows
+
+    def columns(self) -> int:
+        '''Returns amount of columns in the field'''
+        return self._columns
+
+    def field(self) -> [[int]]:
+        '''Returns the current state of the field in 'list' form'''
+        return self._field.copy()
+
+    def update_field(self, field: [[int]]) -> None:
+        '''Updates field using a specific version of what the board should
+        look like'''
+        if self._game_over:
+            raise GameOverError
+        
+        try:
+            for i in range(len(self._field)):
+                for j in range(len(self._field[i])):
+                    if field[i][j] not in VALID_VALUES:
+                        raise InvalidJewelError
+                    self._field[i][j] = field[i][j]
+        except IndexError:
+            raise InvalidFieldValueError
+
+        self._current_matches = []
+        self._faller = None
+
+    def update_field_value(self, value: int, location: (int, int)) -> None:
+        '''Updates a specific part of the field to contain the value'''
+        if self._game_over:
+            raise GameOverError
+        
+        row, column = location
+        if value not in VALID_VALUES:
+            raise InvalidJewelError
+        try:
+            self._field[row][column] = value
+        except:
+            raise InvalidFieldValueError
+
+    def fill(self) -> None:
+        '''Fills any holes that the field may contain'''
+        if self._game_over:
+            raise GameOverError
+        
+        for j in range(len(self._field[0])):
+            for i in range(len(self._field)-1):
+                if self._field[i+1][j] == EMPTY:
+                    self._field[i][j], self._field[i+1][j] = (self._field[i+1][j],
+                                                              self._field[i][j])
+    def has_faller(self) -> bool:
+        '''Returns whether there is a faller currently on the field'''
+        return not (self._faller == None)
+
+    def faller(self) -> Faller:
+        '''Returns a copy of the faller'''
+        return self._faller
+
+    def add_faller(self, column: int, values: [int, int, int]):
+        '''Creates a faller and adds it to the field'''
+        if self._game_over:
+            raise GameOverError
+        
+        if not (-1 < column < self._columns):
+            raise InvalidFieldValueError
+
+        if self.has_faller():
+            raise OnlyOneFallerError
+        
+        for jewel in values:
+            if jewel not in VALID_VALUES:
+                raise InvalidJewelError
+
+        if self._field[0][column] != EMPTY:
+            raise InvalidMoveError
+            
+        self._faller = Faller(0, column, values)
+        self.update_field_value(self._faller.bottom(), (0, column))
+
+    def drop_faller(self) -> None:
+        '''Drops the faller by 1 and reflects that in the field'''
+        if self._game_over:
+            raise GameOverError
+        
+        row = self._faller.row_bottom_value()
+
+        if (row < (self.rows()-1) and
+            self._field[row+1][self._faller.column()] is EMPTY):
+            
+            self._faller.drop()
+            r = row - 1
+            for jewel in self._faller.values():
+                if r >= 0:
+                    self.update_field_value(jewel, (r, self._faller.column()))
+                r += 1
+
+            update_row =  self._faller.row_bottom_value() - 3
+            if  update_row >= 0:
+                self.update_field_value(EMPTY, (update_row, self._faller.column()))
+
+    def move_faller_left(self) -> None:
+        '''If there is a faller on the field, it moves it left'''
+        if self._game_over:
+            raise GameOverError
+        
+        if not self.has_faller():
+            raise NoFallerError
+
+        if self._faller.is_frozen():
+            raise FallerIsFrozenError
+        
+        if self._faller.column() == 0:
+            raise InvalidMoveError
+        
+        r = self._faller.row_bottom_value()
+        c = self._faller.column()-1
+
+        occupied = False
+        for jewel in self._faller.values():
+            if r >= 0:
+                if self._field[r][c] is not EMPTY:
+                    occupied = True
+            r -= 1
+        if occupied:
+            raise InvalidMoveError
+        
+        self._faller.move_left()
+        row = self._faller.row_bottom_value() - 2
+        for jewel in self._faller.values():
+            if row >= 0:
+                self.update_field_value(jewel, (row, self._faller.column()))
+                self.update_field_value(EMPTY, (row, self._faller.column() + 1))
+            row += 1
+ 
+
+    def move_faller_right(self) -> None:
+        '''If there is a faller on the field, it moves it right'''
+        if self._game_over:
+            raise GameOverError
+        
+        if not self.has_faller():
+            raise NoFallerError
+        if self._faller.column() >= self._columns - 1:
+            raise InvalidMoveError
+        
+        r = self._faller.row_bottom_value()
+        c = self._faller.column()+1
+
+        occupied = False
+        for jewel in self._faller.values():
+            if r >= 0:
+                if self._field[r][c] is not EMPTY:
+                    occupied = True
+            r -= 1
+        if occupied:
+            raise InvalidMoveError
+        
+        self._faller.move_right()
+        row = self._faller.row_bottom_value() - 2
+        for jewel in self._faller.values():
+            if row >= 0:
+                self.update_field_value(jewel, (row, self._faller.column()))
+                self.update_field_value(EMPTY, (row, self._faller.column()-1))
+            row += 1
+
+    def spot_contains_faller(self, row: int, column: int) -> bool:
+        '''Returns true if a spot on the field contains part of a faller'''
+        if not self.has_faller():
+            return False
+        bottom_row = self._faller.row_bottom_value()
+        return (bottom_row-2 <= row <= bottom_row and
+                self._faller.column() == column)
+
+    def rotate_faller(self) -> None:
+        '''Rotates the faller on the field'''
+        if self._game_over:
+            raise GameOverError
+        
+        if self._faller.is_frozen():
+            raise FallerIsFrozenError
+        
+        self._faller.rotate()
+        row = self._faller.row_bottom_value() -2
+        col = self._faller.column()
+        
+        for h in range(len(self._faller.values())):
+            if row >= 0:
+                self.update_field_value(self._faller.values()[h],
+                (row, col))
+            row += 1
+
+    def freeze_faller(self) -> None:
+        '''Freezes the faller on the field'''
+        if self._game_over:
+            raise GameOverError
+        
+        if self._faller == None:
+            raise NoFallerError
+        
+        self._faller.freeze()
+        self._faller = None
+
+    def match(self) -> 'Match' or None:
+        '''Will return the match or none if there is no match'''
+        is_row_match, coordinates = self._row_match()
+        
+        if is_row_match:
+            match = Match(coordinates = coordinates)
+            self._current_matches.append(match)
+            return match
+        
+        is_column_match, coordinates = self._column_match()
+        if is_column_match:
+            match = Match(coordinates = coordinates)
+            self._current_matches.append(match)
+            return match
+
+        is_diagonal_match, matching_coors = self._diagonal_match()
+        if is_diagonal_match:
+            match = Match(coordinates = matching_coors)
+            self._current_matches.append(match)
+            return match
+        
+        return
+
+    def _row_match(self) -> (bool, [(int)]):
+        '''Checks if there are any matches in a row, if so returns the row
+        and the columns that match'''
+        matching_coor = []
+        for i in range(len(self._field)):
+            new_match = True
+            match_val = self._field[i][0]
+            matching_coor = [(i, 0)]
+            
+            for j in range(1, len(self._field[i])):
+                if self._field[i][j] != match_val and len(matching_coor) < 3:
+                    match_val = self._field[i][j]
+                    matching_coor = []
+                if (self._field[i][j] == match_val and
+                    self._field[i][j] is not EMPTY):
+                    matching_coor.append((i,j))
+                    
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if match.coordinates == matching_coor:
+                        new_match = False
+                        break
+                if new_match:   
+                    return True, matching_coor
+        return False, -1
+
+    def _column_match(self) -> (bool, [(int)]):
+        '''Checks if there are vertical matches, if so returns the column and
+        the rows that match'''
+        matching_coor = []
+        for j in range(len(self._field[0])):
+            new_match = True
+            match_val = self._field[0][j]
+            matching_coor = [(0,j)]
+            
+            for i in range(1, len(self._field)):
+                if self._field[i][j] != match_val and len(matching_coor) < 3:
+                    match_val = self._field[i][j]
+                    matching_coor = []
+                    
+                if (self._field[i][j] == match_val
+                    and self._field[i][j] is not EMPTY):
+                    matching_coor.append((i,j))
+
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if match.coordinates == matching_coor:
+                        new_match = False
+                        break
+                if new_match:
+                    return True, matching_coor
+        return False, -1
+
+    def _diagonal_match(self) -> (bool, [(int)]):
+        '''Checks if there are any diagonal matches, if so it returns the top
+        value's coordinates, the orientation, and the length'''
+
+        possible_match = self._left_side_diagonal_match() 
+        if type(possible_match) == tuple:
+            return possible_match
+
+        possible_match = self._right_side_diagonal_match()
+        if type(possible_match) == tuple:
+            return possible_match
+
+        return False, -1
+
+    def _left_side_diagonal_match(self) -> (bool, [(int)]):
+        '''Checks if there are any diagonal matches from the left side'''
+
+        matching_coor = []
+        row = 0
+        column = 0
+        for h in range(len(self._field[0])):
+            new_match = True
+            row = 0
+            column = h
+            match_val = self._field[row][column]
+            matching_coor = [(row, column)]
+
+            if self.columns() -h -1 < self.rows() -1:
+                times = self.columns() -h -1
+            else:
+                times = self.rows() -1
+                
+            for k in range(times):
+                row += 1
+                column += 1
+                if (match_val != self._field[row][column] and
+                    len(matching_coor) < 3):
+                    match_val = self._field[row][column]
+                    matching_coor = []
+                if (self._field[row][column] == match_val and
+                    match_val is not EMPTY):
+                    matching_coor.append((row, column))
+
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if matching_coor == match.coordinates:
+                        new_match = False
+                        break
+                if new_match:
+                    return True, matching_coor
+
+        for i in range(1, len(self._field)):
+            new_match = True
+            row = i
+            column = 0
+            match_val = self._field[row][column]
+            matching_coor = [(row, column)]
+
+            if self.columns()-1 < self.rows() - i -1:
+                times = self.columns() -1
+            else:
+                times = self.rows() - i -1
+
+            for j in range(times):
+                row += 1
+                column += 1
+                if (match_val != self._field[row][column] and
+                    len(matching_coor) < 3):
+                    match_val = self._field[row][column]
+                    matching_coor = []
+                if (self._field[row][column] == match_val and
+                    match_val is not EMPTY):
+                    matching_coor.append((row, column))
+
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if matching_coor == match.coordinates:
+                        new_match = False
+                        break
+                if new_match:
+                    return True, matching_coor
+
+    def _right_side_diagonal_match(self) -> (bool, [(int)]):
+        matching_coor = []
+        row = 0
+        column = -1
+
+        for h in range(len(self._field[0]) -1, -1, -1):
+            new_match = True
+            row = 0
+            column = h
+            match_val = self._field[row][column]
+            matching_coor = [(row, column)]
+
+            if h < self.rows() -1:
+                times = h
+            else:
+                times = self.rows() -1
+                
+            for k in range(times):
+                row +=1
+                column -= 1
+
+                if (match_val != self._field[row][column] and
+                    len(matching_coor) < 3):
+                    match_val = self._field[row][column]
+                    matching_coor = []
+                if (self._field[row][column] == match_val and
+                    match_val is not EMPTY):
+                    matching_coor.append((row, column))
+
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if matching_coor == match.coordinates:
+                        new_match = False
+                        break
+                if new_match:
+                    return True, matching_coor
+
+        for i in range(1, len(self._field)):
+            new_match = True
+            row = i
+            column = len(self._field[i]) -1
+            match_val = self._field[row][column]
+            matching_coor = [(row, column)]
+
+            if self.columns()-1 < self.rows() - i -1:
+                times = self.columns() -1
+            else:
+                times = self.rows() - i -1
+
+            for j in range(times):
+                row += 1
+                column -= 1
+                if (match_val != self._field[row][column] and
+                    len(matching_coor) < 3):
+                    match_val = self._field[row][column]
+                    matching_coor = []
+                if (self._field[row][column] == match_val and
+                    match_val is not EMPTY):
+                    matching_coor.append((row, column))
+
+            if len(matching_coor) >= 3:
+                for match in self._current_matches:
+                    if matching_coor == match.coordinates:
+                        new_match = False
+                        break
+                if new_match:
+                    return True, matching_coor
+                
+
+    def current_matches(self) -> [Match]:
+        '''Returns all the matches that are on the field'''
+        return self._current_matches.copy()
+
+
+    def is_column_full(self, c: int) -> bool:
+        '''Returns whether the specified column is full or not, intended
+        to be used to check if when a faller lands the game is over'''
+        if c < 0 or c >= self.columns():
+            raise InvalidFieldValue
+        
+        for row in self._field:
+            if row[c] == EMPTY:
+                return False
+
+        return True
+        self._game_over = True
+
+    def is_field_full(self) -> bool:
+        '''Returns whether the field is completley full'''
+        for row in self._field:
+            for jewel in self._field[0]:
+                if jewel is EMPTY:
+                    return False
+        return True
+        self._game_over = True
+                    
+
+    def _create_new_field(self) -> [[int]]:
+        '''Creates a new empty field with the given rows and columns'''
+        field = []
+        for i in range(self._rows):
+            field.append([])
+            for j in range(self._columns):
+                field[i].append(EMPTY)
+        return field
+
+
+
