@@ -1,0 +1,209 @@
+//mainClass.java, Sofia Perez de Tudela (23918085)
+
+
+class Shape{
+    protected String name;
+    
+    Shape(String name){
+        this.name = name;
+    }
+
+    void print(){
+        System.out.print(this.name);
+    }
+
+    void draw(){}
+    
+    double area(){return 0.0;}
+}
+
+
+class Circle extends Shape{
+    private int radius;
+    static final double PI = 3.14;
+
+    Circle(String name, int radius){
+        super(name);
+        this.radius = radius;
+    }
+    
+    @Override
+    void print(){
+        super.print();
+        System.out.println("("+this.radius+") : "+this.area());
+    }
+    
+    @Override
+    void draw(){
+        System.out.println(" * *");
+        System.out.println("*   *");
+        System.out.println(" * *");
+    }
+
+    @Override
+    double area(){return PI*Double.valueOf(this.radius*this.radius);}
+}
+
+class Triangle extends Shape{
+    private int base, height;
+
+    Triangle(String name, int base, int height){
+        super(name);
+        this.base = base;
+        this.height = height;
+    }
+
+    @Override
+    void print(){
+        super.print();
+        System.out.println("("+this.base+", "+this.height+") : "+this.area());
+    }
+    
+    @Override
+    void draw(){
+        System.out.println("  *");
+        System.out.println(" * *");
+        System.out.println("*   *");
+        System.out.println("*****");
+    }
+    
+    @Override
+    double area(){
+        return Double.valueOf(
+        this.base*this.height)/2.0;
+    }
+}
+
+class Square extends Shape{
+    protected int length;
+
+    Square(String name, int length){
+        super(name);
+        this.length = length;
+    }
+
+    @Override
+    void print(){
+        super.print();
+        System.out.println("("+this.length+") : "+this.area());
+    }
+    
+    @Override
+    void draw(){
+        System.out.println("*****");
+        System.out.println("*   *");
+        System.out.println("*****");
+    }
+    
+    @Override
+    double area(){return this.length*this.length;}
+
+}
+
+class Rectangle extends Square{
+    private int width;
+    Rectangle(String name, int length, int width){
+        super(name,length);
+        this.width = width;
+    } 
+
+    @Override
+    void print(){
+        System.out.println(name+"("+this.length+", "+this.width+") : "+this.area());
+    }
+    
+    @Override
+    void draw(){
+        System.out.println("*****");
+        System.out.println("*   *");
+        System.out.println("*   *");
+        System.out.println("*   *");
+        System.out.println("*****");
+                            
+    }
+
+    @Override
+    double area(){return this.length*this.width;}
+}
+
+//Developed in Class
+class ListNode{  
+    Shape info;
+    ListNode next;
+
+    ListNode(Shape info, ListNode next){
+        this.info = info;
+        this.next = next;
+    }
+}
+
+class Picture{
+    ListNode head;
+    Picture(){
+        this.head = null;
+    }
+
+    void add(Shape sh){
+        this.head = new ListNode(sh, this.head);
+    }
+
+    void printAll(){
+        for(ListNode s = this.head; s != null; s = s.next){
+            s.info.print();
+        }
+    }
+
+    void drawAll(){
+        for(ListNode s = this.head; s != null; s = s.next){
+            s.info.draw();
+        }
+    }
+    
+    void totalArea(){
+        double total = 0;
+        for(ListNode s = this.head; s != null; s = s.next){
+            total += s.info.area();
+        }
+        System.out.println("Total : "+total);
+    }
+
+}
+
+public class mainClass{
+
+    public static void main(String[] args){
+        
+        
+        int val1, val2;
+        try{
+            val1 = Integer.parseInt(args[0]);
+            val2 = Integer.parseInt(args[1]);
+            }
+        catch(Exception e){
+            return;
+        }
+
+        Picture myPic = new Picture(); 
+        //Triangles
+        myPic.add(new Triangle("FirstTriangle",val1, val2));
+        myPic.add(new Triangle("SecondTriangle",val1-1, val2-1));
+    
+        //Circles
+        myPic.add(new Circle("FirstCircle",val1));
+        myPic.add(new Circle("SecondCircle",val1-1));
+
+        //Squares
+        myPic.add(new Square("FirstSquare",val1));
+        myPic.add(new Square("SecondSquare",val1-1));
+
+        //Rectangles
+        myPic.add(new Rectangle("FirstRectangle",val1, val2));
+        myPic.add(new Rectangle("SecondRectangle",val1-1, val2-1));
+
+        //Print Everything :)
+        myPic.printAll();
+        myPic.drawAll();
+        myPic.totalArea();
+   }
+    
+}
